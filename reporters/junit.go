@@ -66,12 +66,12 @@ func CreateXmlReport(container string, cutoff string, findings ecr.ImageScanFind
 // newTestSuite generates a populated JUnitTestSuite for a container (name) for a set of ecr.ImageScanFindings failing or passing individual
 // cases based on a cutoff (either 'LOW', 'MEDIUM', 'HIGH' or 'CRITICAL') and an allowList. Returns a JUnitTestSuite.
 func newTestSuite(container string, cutoff string, findings ecr.ImageScanFindings, allowList *[]string) (testSuite JUnitTestSuite) {
-	testSuite = JUnitTestSuite{
+    testSuite = JUnitTestSuite{
 		XMLName:   xml.Name{container, "bla"},
 		TestCases: nil,
 		Name:      container,
 		Tests:     len(findings.Findings),
-		Failures:  countFailures(cutoff, findings.FindingSeverityCounts),
+		Failures:  countFailures(cutoff, findings.FindingSeverityCounts)-countAllowListFailures(cutoff, findings, allowList),
 		Errors:    int(getSeverityCount("UNDEFINED", findings.FindingSeverityCounts)),
 		Time:      0,
 	}
@@ -123,6 +123,31 @@ func hasPassedCutoff(cutoff string, severity string) bool {
 		"CRITICAL":      3,
 	}
 	return !(severityMap[severity] >= severityMap[cutoff])
+}
+
+func countAllowListFailures(cutoff string, findings ecr.ImageScanFindings, allowList *[]string) (failures int) {
+    var fails int64 = 0
+    for f := range findings.Findings {
+
+    	// passed := hasPassedCutoff(cutoff, *findings.Findings[f].Severity)
+
+    	packageName, err := helpers.ExtractPackageAttributes("package_name", findings.Findings[f])
+    	packageVersion, err := helpers.ExtractPackageAttributes("package_version", findings.Findings[f])
+
+    	packageString := fmt.Sprintf("%s@%s", packageName, packageVersion)
+
+    	allowListed, hit := helpers.InAllowList(*allowList, packageString)
+
+    	if err != nil {
+    		panic(err)
+    	}
+
+    	if allowListed {
+            fails = fails + 1
+            fmt.Sprintf("hello%s", hit)
+        }
+    }
+    return int(fails)
 }
 
 // createTestCase converts a ecr.ImageScanFinding to an annotated JUnitTestCase
